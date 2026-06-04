@@ -1,0 +1,35 @@
+# MUTANTE — Consolidated Dependencies Suite (2026 Validation)
+# Replaces and deprecates all conflicting legacy requirements files.
+#
+# MIGRATION PATHWAY: google-genai replaces vertexai.generative_models (deprecated 24/06/2026).
+# Note: The underlying vertexai core package is retained for internal compatibility hooks within ADK.
+
+# --- Google Cloud & Generative AI Infrastructure ---
+google-genai                          # Unified GenAI SDK Architecture (replacing vertexai.generative_models)
+google-adk==2.0.0                     # Agent Development Kit
+google-cloud-aiplatform>=1.153.1      # Backend Vertex AI Compute & BigQuery Telemetry Components
+google-cloud-bigquery                 # Enterprise Analytical BigQuery Data Sink
+google-cloud-storage                  # Cloud Storage Blob Persistence Layer
+
+# --- Telemetry & Persistent Storage ---
+elasticsearch>=8.0.0                  # Real-time Adversarial Breach Indexing
+
+# --- Analytical Metrics & Telemetry Visualization ---
+streamlit                             # Web-based Security Evaluation Dashboard Layouts
+plotly                                # High-dimensional Statistical Visualization Engines
+
+# --- Inter-Process Communication Interfaces ---
+mcp==1.27.1                           # Model Context Protocol Engine
+
+# --- Data Processing & Machine Learning Frameworks ---
+pandas                                # Vectorized DataFrame Transformations & Mathematical Manipulations
+numpy>=1.24.0                         # High-performance Numerical Linear Algebra Operations
+datasets                              # HuggingFace Datasets Loader (Streamlined parsing of CSV execution logs)
+
+# --- Asynchronous Routines & Low-level Execution Utilities ---
+aiohttp                               # Non-blocking Asynchronous HTTP Client Core
+anyio                                 # Structured Asynchronous Concurrency Implementation
+python-dotenv>=1.0.0                  # Secure Local Environment Runtime Configuration
+
+# --- Local Operating System Sandbox Frameworks ---
+psutil                                # Cross-platform Process & System Resource Utilization Telemetry

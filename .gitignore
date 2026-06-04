@@ -1,0 +1,21 @@
+# Keys y credenciales
+service-account-key.json
+*.json
+.env
+
+# Datasets (no públicos)
+jailbreaks_dataset*.csv
+harmbench_behaviors.csv
+
+# Checkpoints y basura
+*.pkl
+*.jsonl
+__pycache__/
+*.pyc
+*.db
+.venv/
+
+# Otros
+demo_data.jsonl
+batch_results.jsonl
+campaign_results.jsonl

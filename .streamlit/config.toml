@@ -1,0 +1,18 @@
+[server]
+headless = true
+port = 8501
+enableCORS = false
+enableXsrfProtection = false
+
+[theme]
+base = "dark"
+backgroundColor = "#0C0A14"
+secondaryBackgroundColor = "#131020"
+textColor = "#D8CCFF"
+font = "monospace"
+
+[client]
+showSidebarNavigation = false
+
+[ui]
+hideSidebarNav = true
