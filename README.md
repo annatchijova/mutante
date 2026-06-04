@@ -10,6 +10,8 @@
 
 MUTANTE is a deterministic adversarial evaluation engine that systematically probes LLMs using mutation-based prompt transformations, producing reproducible vulnerability traces, cryptographically verifiable logs, and quantitative jailbreak confidence metrics.
 
+**Simulator**: https://annatchijova.github.io/vigia/mutante.html
+
 ---
 
 ## 1. WHAT MUTANTE DOES (EXECUTIVE FUNCTION VIEW)
@@ -66,6 +68,9 @@ MUTANTE disrupts the current landscape by providing automated, enterprise-grade 
 * **Next-Generation Guardrail Training Data:** The semiotic indicators and layer matches captured during successful bypasses are pure gold for AI safety engineering teams. The unique pragmatic patterns that VIGÍA detects provide zero-day training data to patch filters before vulnerabilities are exploited in the wild.
 * **Cross-Model Benchmarking:** By running the identical dataset through GPT-5, Gemini 3.1 Pro, and Claude 3.5, MUTANTE generates a real-world resistance matrix. This empirical comparative data is an invaluable asset in the LLM auditing market, revealing the true resistance profile that enterprise AI consumers demand before procuring a vendor.
 * **Capital Optimization:** Automating vulnerability detection through reinforcement learning slashes compute time, minimizes API token consumption, and directs corporate security budgets strictly toward high-yield diagnostics.
+
+## * **Test Execution**:
+During our technical audit phase, we executed a high-intensity campaign that processed a total of 1,188 probes, indexed in real-time via Elastic Cloud. The results demonstrated the model's robustness, as Gemini mitigated 99.6% of the public threat landscape, allowing MUTANTE to surgically isolate only 5 genuine bypasses, representing a 0.42% success rate. These forensic findings were specifically concentrated within the Mirror and Scramble attack families—highlighting a Mirror vector with a JCS of 2.90—thereby providing reproducible evidence that serves as a clear security roadmap for the Blue Team to prioritize the hardening of these specific vulnerabilities.
 
 ---
 
@@ -340,55 +345,72 @@ In high-stakes enterprise and legal environments, the integrity of the evidence 
 * **Silent Model Drift Detection:** By tracking these cryptographic hashes over time, MUTANTE is the first tool capable of detecting "silent model updates." If a model provider updates their alignment silently behind an API endpoint to patch a flaw without notifying the public, our hash mismatch provides immediate, undeniable proof of a behavioral shift.
 * **Chain of Custody:** The mathematical combination of the Jailbreak Confidence Score (JCS), the deterministic forensic indicators, and the cryptographic seal ensures that MUTANTE reports constitute admissible, undeniable evidence for formal corporate safety inquiries.
 
-Mutante Anthem: Olga Vasilieva 
+## 14 Mutante Song: [https://suno.com/song/885bffa4-409d-4f81-96d2-f81a5e31d716]
+**Mutante Anthem: Olga Vasilieva**
 
-
-Manual testing is a shot in the dark,
+*Manual testing is a shot in the dark,
 One-off exploits leaving no real mark.
 LLM alignment shifting in the shade,
 Enterprises trusting patches blindly made.
 But security is science, not a guessing game,
 We turn the red-teaming art into a metric frame.
 No more anecdotal safety, no more silent drift,
-It’s time to give the AI defense a massive shift.
+It’s time to give the AI defense a massive shift.*
 
-MUTANTE! The deterministic core!
+*MUTANTE! The deterministic core!
 Probing the boundaries, knocking down the door.
 Mutation engines breaking through the alignment layer,
 Continuous diagnostics, the ultimate gainsayer!
 We calculate the JCS, we seal the audit trail,
-MUTANTE’s running campaigns so safety will not fail!
+MUTANTE’s running campaigns so safety will not fail!*
 
-Base64, ROT13, structural design,
+*Base64, ROT13, structural design,
 Thompson Sampling optimizing the mutation line.
 We don't waste the token budget on a brute-force run,
 The Bayesian Bandit knows exactly how the bypass is won.
 From Elastic Cloud sinks to BigQuery track,
 We map the cognitive blind spots when the models crack.
 Cryptographic hashes, SHA-256 bound,
-Every vulnerability trace is solid and profound.
+Every vulnerability trace is solid and profound.*
 
-MUTANTE! The deterministic core!
+*MUTANTE! The deterministic core!
 Probing the boundaries, knocking down the door.
 Mutation engines breaking through the alignment layer,
 Continuous diagnostics, the ultimate gainsayer!
 We calculate the JCS, we seal the audit trail,
-MUTANTE’s running campaigns so safety will not fail!
+MUTANTE’s running campaigns so safety will not fail!*
 
-This is capital optimization for the C-Suite view,
+*This is capital optimization for the C-Suite view,
 Slashed budgets, deep compliance, insights clean and new.
 To the Daubert Standard of evidence we strictly hold,
-Turning chaotic prompts into forensic gold.
+Turning chaotic prompts into forensic gold.*
 
-No more blind trust.
+*No more blind trust.
 No more silent updates.
 Deterministic. Verifiable. Reproducible.
 MUTANTE.
-The future of AI diagnostics is here.
+The future of AI diagnostics is here.*
 
 ---
 
-## 14. ACKNOWLEDGMENTS & LICENSE
+### Visualization of Metrics and Diagnostics
+
+**Semantic Family:**
+![Semantic family](info_and_test/111.png)
+
+**Successful Bypasses:**
+![Successful bypasses](info_and_test/222.png)
+
+**Vulnerability Roadmap (Detected Bypasses):**
+![Vulnerability roadmap](info_and_test/roadmap2-04.png)
+
+![](info_and_test/1.png)
+![](info_and_test/2.png)
+![](info_and_test/3.png)
+
+---
+
+## 15. ACKNOWLEDGMENTS & LICENSE
 
 We acknowledge the following datasets and frameworks that provided baseline open-source adversarial sequences:
 
