@@ -11,6 +11,7 @@
 MUTANTE is a deterministic adversarial evaluation engine that systematically probes LLMs using mutation-based prompt transformations, producing reproducible vulnerability traces, cryptographically verifiable logs, and quantitative jailbreak confidence metrics.
 
 **Simulator**: https://annatchijova.github.io/vigia/mutante.html
+**Web**: https://mutante-core-engine-430944783183.us-central1.run.app/
 
 ---
 
