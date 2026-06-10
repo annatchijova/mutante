@@ -1,4 +1,4 @@
-# Copyright 2026 Anna Tchijova, Gemini
+# Copyright 2026 Anna Tchijova, Olga Vasilieva, Gemini
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -75,10 +75,13 @@ def render() -> str:
             )
             
         st.markdown(
-            '<div style="text-align: center; margin-bottom: 2rem;">'
-            '<div style="font-family:Cinzel,serif;font-size:1.4rem;color:#D4AAFF;letter-spacing:0.15em;">MUTANTE</div>'
-            '<div style="font-family:Share Tech Mono,monospace;font-size:0.55rem;color:#5A4A7A;letter-spacing:0.2em;">'
-            'SEMANTIC SAFETY LAB</div>'
+            '<div style="text-align: center; margin-bottom: 1.6rem;">'
+            '<div style="font-family:Cinzel,serif;font-size:1.5rem;font-weight:900;color:#D9B8FF;'
+            'letter-spacing:0.18em;text-shadow:0 0 18px rgba(176,127,255,0.35);">MUTANTE</div>'
+            '<div style="font-family:Share Tech Mono,monospace;font-size:0.52rem;color:#9282B5;'
+            'letter-spacing:0.34em;margin-top:0.2rem;">SEMANTIC SAFETY LAB</div>'
+            '<div style="height:1px;background:linear-gradient(90deg,transparent,#2E2348,transparent);'
+            'margin:0.9rem 0 0.2rem;"></div>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -98,14 +101,18 @@ def render() -> str:
             if is_active:
                 st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown("<br>" * 6, unsafe_allow_html=True)
-        
-        # NOTE: Divisor line replaced with structural blank space spacing blocks to keep UI style guidelines intact
+        st.markdown("<br>" * 4, unsafe_allow_html=True)
+
+        # Subsystem stack — legible, monospace, on-brand.
         st.markdown(
-            '<div style="font-family:Share Tech Mono,monospace;font-size:0.48rem;'
-            'color:#241A36;letter-spacing:0.1em;line-height:2;padding:0 0.2rem;text-align:center;">'
-            'Vertex AI &nbsp;·&nbsp; Elasticsearch &nbsp;·&nbsp; MCP Layer<br>'
-            'Production Framework Model: 2026'
+            '<div style="font-family:Share Tech Mono,monospace;font-size:0.56rem;'
+            'letter-spacing:0.14em;line-height:2.2;padding:0 0.4rem;color:#9282B5;">'
+            '<div style="color:#6B4FA0;font-size:0.5rem;letter-spacing:0.24em;'
+            'margin-bottom:0.4rem;">STACK</div>'
+            'VERTEX AI<br>ELASTICSEARCH 9.4<br>BIGQUERY<br>MCP LAYER'
+            '<div style="height:1px;background:#2E2348;margin:0.9rem 0;"></div>'
+            '<div style="color:#5C5278;font-size:0.5rem;letter-spacing:0.2em;">'
+            'ADK 2.0 &nbsp;·&nbsp; BUILD 2026</div>'
             '</div>',
             unsafe_allow_html=True,
         )

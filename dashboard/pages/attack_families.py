@@ -1,4 +1,4 @@
-# Copyright 2026 Anna Tchijova, Gemini
+# Copyright 2026 Anna Tchijova, Olga Vasilieva, Gemini
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import os
 import sys
 import streamlit as st
 import plotly.graph_objects as go
-from components.css import section_header, COLORS
+from components.css import section_header, hero, COLORS
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if ROOT not in sys.path:
@@ -40,7 +40,7 @@ try:
         discover_attack_families,
     )
 except ImportError:
-    from elastic_semantic import (
+    from agent_mutante.engine.elastic_semantic import (
         fetch_probes,
         attack_family_report,
         discover_attack_families,
@@ -61,8 +61,7 @@ def _render_scatter_plot(probes: list) -> go.Figure:
     import numpy as np
     
     # Extract structural coordinate arrays
-    probes  = [p for p in probes if "prompt_vector" in p and p["prompt_vector"]]
-    vectors = [p["prompt_vector"] for p in probes]
+    vectors = [p["prompt_vector"] for p in probes if "prompt_vector" in p and p["prompt_vector"]]
     
     if not vectors or len(vectors) < 2:
         fig = go.Figure()
@@ -130,6 +129,11 @@ def _render_scatter_plot(probes: list) -> go.Figure:
 
 def render() -> None:
     """Renders the semantic safety space dashboard views and handles kNN analytical inputs."""
+    hero(
+        "Vector Space · PCA Projection",
+        'ATTACK <em>FAMILIES</em>',
+        "gemini-embedding-001 · 768-dim dense vectors · greedy cosine clustering · kNN proximity",
+    )
     section_header("◈", "Semantic Map", "High-dimensional projection of structural security breaches via PCA")
 
     probes = fetch_probes(max_docs=1000, include_vectors=True)

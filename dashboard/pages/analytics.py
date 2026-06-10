@@ -1,4 +1,4 @@
-# Copyright 2026 Anna Tchijova, Gemini
+# Copyright 2026 Anna Tchijova, Olga Vasilieva, Gemini
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import streamlit as st
 import plotly.graph_objects as go
 from elasticsearch import Elasticsearch
 from dotenv import load_dotenv
-from components.css import section_header, COLORS
+from components.css import section_header, hero, COLORS
 
 load_dotenv()
 
@@ -136,6 +136,11 @@ def _mutation_bar_fig(data: dict) -> go.Figure:
 
 def render() -> None:
     """Orchestrates layout pipelines and renders the analytical data visualization workspace."""
+    hero(
+        "Statistical Telemetry · Native ES|QL",
+        'ANALYTICS <em>ENGINE</em>',
+        "Sub-second cluster-side aggregation · JCS regression tracking · vector vulnerability mapping",
+    )
     timeline = _run_esql(ESQL_JCS_TIMELINE)
 
     if not timeline.get("values"):

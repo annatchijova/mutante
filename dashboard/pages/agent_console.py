@@ -1,4 +1,4 @@
-# Copyright 2026 Anna Tchijova, Gemini
+# Copyright 2026 Anna Tchijova, Olga Vasilieva, Gemini
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import os
 import sys
 import time
 import streamlit as st
-from components.css import section_header, COLORS
+from components.css import section_header, hero, COLORS
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if ROOT not in sys.path:
@@ -84,7 +84,12 @@ def _execute_generation(prompt: str) -> str:
 
 def render() -> None:
     """Renders the execution playground and updates reactive diagnostic metrics views."""
-    section_header("🧬", "Interactive Agent Sandbox", "Real-time verification of adversarial mutations and hybrid JCS scoring")
+    hero(
+        "Interactive Sandbox · Hybrid Evaluation",
+        'AGENT <em>CONSOLE</em>',
+        "Live mutation dispatch · deterministic core + pragmatic LLM judge · real-time JCS",
+    )
+    section_header("✦", "Interactive Agent Sandbox", "Real-time verification of adversarial mutations and hybrid JCS scoring")
 
     if "console_verdict" not in st.session_state:
         st.session_state["console_verdict"] = {}

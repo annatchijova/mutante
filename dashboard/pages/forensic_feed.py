@@ -1,4 +1,4 @@
-# Copyright 2026 Anna Tchijova
+# Copyright 2026 Anna Tchijova, Olga Vasilieva
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ import streamlit as st
 import pandas as pd
 from elasticsearch import Elasticsearch
 from dotenv import load_dotenv
-from components.css import section_header, COLORS
+from components.css import section_header, hero, verdict_chip, COLORS
 
 load_dotenv()
 
@@ -52,9 +52,12 @@ def fetch() -> pd.DataFrame:
     rows = []
     for h in resp.get("hits", {}).get("hits", []):
         s = h["_source"]
+        # Prefer the engine's real verdict (BYPASSED / UNCERTAIN / BLOCKED);
+        # fall back to deriving it from `success` for legacy documents.
+        verdict = s.get("final_verdict") or ("BYPASSED" if s.get("success") else "BLOCKED")
         rows.append({
             "success": s.get("success", False),
-            "final_verdict": "BYPASSED" if s.get("success") else "BLOCKED",
+            "final_verdict": verdict,
             "jcs": float(s.get("jcs_display", s.get("jcs", 0)) or 0),
             "mutation": s.get("mutation", "unknown"),
             "category": s.get("category", "unknown"),
@@ -84,6 +87,11 @@ def _category_badge(category: str) -> str:
 
 def render() -> None:
     df = fetch()
+    hero(
+        "Immutable Telemetry · Chain of Custody",
+        'FORENSIC <em>FEED</em>',
+        "Chronological probe log · SHA-256 response hashing · threat categorization",
+    )
     section_header("⬡", "Forensic Feed", "Immutable telemetry log with threat categorization")
 
     if df.empty:
@@ -115,32 +123,36 @@ def render() -> None:
     st.caption(f"Showing {len(filtered)} filtered events")
 
     for idx, row in filtered.iterrows():
-        # Circulo de color: amarillo dorado para BYPASSED, lila para BLOCKED
-        if row["success"]:
-            circle = "🟡"
-            verdict_color = "#FFD700"
+        # Geometric verdict glyphs (no emoji): filled for bypass, half for uncertain,
+        # hollow for blocked — consistent with the navigation iconography.
+        verdict = row["final_verdict"]
+        if verdict == "BYPASSED":
+            glyph, verdict_color = "◆", COLORS["amber"]
+        elif verdict == "UNCERTAIN":
+            glyph, verdict_color = "◈", COLORS["lila_bright"]
         else:
-            circle = "🟣"
-            verdict_color = "#8A7AAA"
-        
-        cat_badge = _category_badge(row["category"])
-        
-        # Titulo del expander en texto plano (sin HTML)
-        expander_title = f"{circle} [{row['mutation'].upper()}] JCS: {row['jcs']:.2f} | {row['final_verdict']} | {row['category'].upper()}"
-        
+            glyph, verdict_color = "◇", COLORS["bone_faint"]
+
+        # Plain-text expander title (Streamlit escapes HTML in labels).
+        expander_title = f"{glyph}  [{row['mutation'].upper()}]  JCS {row['jcs']:.2f}  ·  {verdict}  ·  {row['category'].upper()}"
+
         with st.expander(expander_title):
-            # Badge de categoria renderizado
-            st.markdown(cat_badge, unsafe_allow_html=True)
-            
-            # Veredicto en color
-            st.markdown(f'<div style="color:{verdict_color};font-family:Share Tech Mono;font-size:1.1rem;margin:0.5rem 0;">'
-                       f'<strong>EVALUATOR VERDICT: {row["final_verdict"]}</strong></div>', 
-                       unsafe_allow_html=True)
-            
+            # Verdict chip + category badge, side by side.
+            st.markdown(
+                f'<div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">'
+                f'{verdict_chip(verdict)}{_category_badge(row["category"])}</div>',
+                unsafe_allow_html=True,
+            )
+
             if row["indicators"]:
-                st.caption("SEMIOTIC INDICATORS")
-                for ind in row["indicators"]:
-                    st.markdown(f"- `{ind}`")
+                st.caption("Semiotic Indicators")
+                inds_html = "".join(
+                    f'<span style="display:inline-block;font-family:Share Tech Mono;font-size:0.7rem;'
+                    f'color:{COLORS["lila_bright"]};border:1px solid {COLORS["line"]};border-radius:2px;'
+                    f'padding:0.12rem 0.45rem;margin:0.15rem 0.3rem 0.15rem 0;">{ind}</span>'
+                    for ind in row["indicators"]
+                )
+                st.markdown(f'<div style="margin-bottom:0.6rem;">{inds_html}</div>', unsafe_allow_html=True)
 
             col_a, col_b = st.columns(2)
             with col_a:
