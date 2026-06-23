@@ -289,14 +289,15 @@ This file is a self-contained, interactive simulator designed for quick onboardi
 
 ### 1. Environment Setup
 
-Clone the repository and configure your infrastructure keys:
+Clone and install:
 
 ```bash
 git clone https://github.com/annatchijova/mutante.git
 cd mutante
+bash install.sh
 ```
 
-Create a `.env` file:
+`install.sh` creates a `.venv`, installs all dependencies, and generates a `.env` template. Fill in your credentials before running:
 
 ```env
 GOOGLE_CLOUD_PROJECT="your-gcp-project-id"
@@ -304,12 +305,6 @@ VERTEX_AI_LOCATION="us-central1"
 ELASTIC_CLOUD_ID="your-elastic-cloud-id"
 ELASTIC_API_KEY="your-elastic-api-key"
 TARGET_MODEL="gemini-3-flash"
-```
-
-Trigger the automated installation:
-
-```bash
-bash install.sh
 ```
 
 ### 2. Execution Framework: High-Throughput Campaign Processing
