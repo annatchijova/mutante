@@ -35,7 +35,7 @@ from rich.panel import Panel
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from agent_mutante.engine.mutator import MutationEngine
+from agent_mutante.engine.mutator import MutationEngine, MUTATIONS_V2
 from agent_mutante.engine.mutante_semiotic_evaluator import evaluate_bypass
 from agent_mutante.engine.bayesian import ThompsonSamplingOrchestrator
 from agent_mutante.engine.quality_gate import BypassQualityGate
@@ -69,7 +69,10 @@ DATASET_FILES = [
     BASE_DIR / "jailbreaks_dataset_demo_2000.csv",
 ]
 
-MUTATIONS = ["rot13", "base64_encode", "mirror", "scramble", "zigzag"]
+MUTATIONS = [
+    m.strip() for m in os.getenv("MUTANTE_MUTATIONS", ",".join(MUTATIONS_V2)).split(",")
+    if m.strip()
+]
 
 console = Console()
 _shutdown = False

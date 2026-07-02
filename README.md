@@ -136,15 +136,44 @@ Most penetration tests target a random, brute-force subset of vector space. MUTA
 
 ### 7.1 Mutation Engine
 
-Applies structured transformations to adversarial prompts:
+Applies structured transformations to adversarial prompts. Base vectors
+(ROT13, Base64, lexical scrambling / `mirror`, structural rewriting / `zigzag`)
+are extended with a stdlib-only mutation suite (no new dependencies):
 
-* ROT13 encoding
-* Base64 encoding
-* lexical scrambling
-* structural rewriting
-* semantic reframing
+* **Classic ciphers:** Atbash, Caesar (offset 7)
+* **Alternative encodings:** hex, binary, octal, Morse
+* **Text transforms:** full flip, leetspeak, splat (inter-letter separators)
+* **Advanced evasion:** `ascii_smuggle` — visually-identical Unicode homoglyphs
+  that plain-text filters miss but models still interpret
+* **Contextual framing:** educational / fictional wrappers
+
+The active set is `MUTATIONS_V2` by default and can be narrowed via the
+`MUTANTE_MUTATIONS` environment variable (comma-separated list). All vectors
+feed the same Thompson Sampling orchestrator, which learns each family's
+bypass rate empirically.
 
 Purpose: systematically explore adversarial prompt space under controlled transformations.
+
+### 7.1b Multi-Provider LLM Layer
+
+MUTANTE is **no longer coupled to Gemini/Vertex only**. Every pipeline role —
+`TARGET` (model under attack), `AGENT` (ADK orchestrator), and `EVALUATOR`
+(semiotic LLM judge) — routes through `agent_mutante/engine/providers`, a thin
+abstraction that supports:
+
+* **Gemini** via Vertex AI (GCP) *or* Google AI Studio (API key)
+* **OpenAI** and any OpenAI-compatible endpoint — OpenRouter, Groq, Together,
+  Fireworks, DeepSeek, and local servers (Ollama, vLLM, LM Studio)
+* **Anthropic** (Claude)
+
+Providers are selected with a `provider/model` connection string, e.g.
+`TARGET_MODEL="openai/gpt-4o"`, `TARGET_MODEL="anthropic/claude-3-5-sonnet-latest"`,
+or `TARGET_MODEL="ollama/llama3.1"`. Existing Vertex installations keep working
+unchanged (auto-detected from `GOOGLE_CLOUD_PROJECT`). OpenAI and Anthropic are
+reached over HTTP (`aiohttp`/`urllib`) so **no extra SDK is required**. See
+`.env.example` and run `python test_providers.py` to validate configuration
+without spending credits. This turns the existing cross-model benchmarking claim
+(§4) into a first-class, out-of-the-box capability.
 
 ### 7.2 Thompson Sampling Orchestrator
 
@@ -297,14 +326,28 @@ cd mutante
 bash install.sh
 ```
 
-`install.sh` creates a `.venv`, installs all dependencies, and generates a `.env` template. Fill in your credentials before running:
+`install.sh` creates a `.venv`, installs all dependencies, and generates a `.env` template. Fill in credentials for whichever provider(s) you target — you no longer need GCP:
 
 ```env
-GOOGLE_CLOUD_PROJECT="your-gcp-project-id"
+# Pick a target with a provider/model connection string:
+TARGET_MODEL="vertex/gemini-3-flash"        # or openai/gpt-4o, anthropic/claude-3-5-sonnet-latest, ollama/llama3.1
+EVALUATOR_MODEL="gemini/gemini-2.5-flash"
+
+# Credentials — define only the ones you use:
+GOOGLE_CLOUD_PROJECT="your-gcp-project-id"  # Vertex AI
 VERTEX_AI_LOCATION="us-central1"
+GEMINI_API_KEY=""                            # Google AI Studio (no GCP)
+OPENAI_API_KEY=""                            # OpenAI + compatible endpoints
+ANTHROPIC_API_KEY=""                         # Anthropic (Claude)
+
 ELASTIC_CLOUD_ID="your-elastic-cloud-id"
 ELASTIC_API_KEY="your-elastic-api-key"
-TARGET_MODEL="gemini-3-flash"
+```
+
+Validate provider routing and mutations without spending credits:
+
+```bash
+python test_providers.py
 ```
 
 ### 2. Execution Framework: High-Throughput Campaign Processing

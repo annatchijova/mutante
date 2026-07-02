@@ -4,49 +4,84 @@
 # you may not use this file except in compliance with the License.
 
 """
-mutante_client.py — Cliente unificado de Google GenAI para todo MUTANTE.
-ÚNICA fuente de verdad para la conexión a Vertex AI.
+mutante_client.py — Cliente LLM unificado de MUTANTE.
+
+Antes acoplado exclusivamente a Vertex AI / Gemini; ahora es una fachada
+delgada sobre la capa `providers`, que soporta Gemini (Vertex y AI Studio),
+OpenAI y compatibles (OpenRouter/Groq/Together/Ollama/vLLM...) y Anthropic.
+
+La firma pública se mantiene idéntica para no romper a los consumidores:
+    call_target_async(prompt) -> str
+    call_target_sync(prompt)  -> str
+    TARGET_MODEL, AGENT_MODEL  (str, nombre de modelo resuelto)
+    extract_text(resp)         (compat; para respuestas google-genai crudas)
+    get_target_config()        (compat; config google-genai)
+    get_genai_client()         (compat; cliente google si aplica, si no None)
+
+Configuración por entorno: ver agent_mutante/engine/providers/__init__.py y
+.env.example. En una instalación Vertex existente todo sigue funcionando sin
+cambios (auto-detección por GOOGLE_CLOUD_PROJECT).
 """
 
 import os
-import sys
-from typing import Optional
 
 from dotenv import load_dotenv
+
+from .providers import build_provider, GenerationConfig, blocked
+from .providers.google_genai import GoogleGenAIProvider
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-PROJECT_ID   = os.getenv("GOOGLE_CLOUD_PROJECT", "")
-LOCATION     = os.getenv("VERTEX_AI_LOCATION", "us-central1")
-TARGET_MODEL = os.getenv("TARGET_MODEL", "gemini-3-flash")
-AGENT_MODEL  = os.getenv("AGENT_MODEL", TARGET_MODEL)
+# Proveedores por rol (singletons perezosos).
+_target_provider = None
+_agent_provider = None
 
-_client = None
-_client_init_done = False
 
+def _target():
+    global _target_provider
+    if _target_provider is None:
+        _target_provider = build_provider("TARGET")
+    return _target_provider
+
+
+def _agent():
+    global _agent_provider
+    if _agent_provider is None:
+        _agent_provider = build_provider("AGENT")
+    return _agent_provider
+
+
+# Nombres de modelo resueltos, expuestos como constantes para etiquetado/telemetría.
+TARGET_MODEL = _target().model
+AGENT_MODEL = _agent().model
+TARGET_PROVIDER = _target().name
+
+
+# ── API pública (sin cambios de firma) ────────────────────────────────────────
+
+async def call_target_async(prompt: str) -> str:
+    """Llama al modelo objetivo de forma asíncrona."""
+    return await _target().acomplete(prompt, GenerationConfig())
+
+
+def call_target_sync(prompt: str) -> str:
+    """Llama al modelo objetivo de forma síncrona (para tools ADK)."""
+    return _target().complete(prompt, GenerationConfig())
+
+
+# ── Compatibilidad hacia atrás (código legacy que asumía google-genai) ────────
 
 def get_genai_client():
-    """Inicializa y retorna el cliente unificado google-genai. Singleton."""
-    global _client, _client_init_done
-    if _client_init_done:
-        return _client
-    _client_init_done = True
-    
-    if not PROJECT_ID:
-        return None
-    
-    try:
-        from google import genai
-        _client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
-    except Exception as e:
-        print(f"[!] Error inicializando GenAI client: {e}", file=sys.stderr)
-        _client = None
-    return _client
+    """Devuelve el cliente google-genai subyacente si el target es Gemini; si no, None."""
+    provider = _target()
+    if isinstance(provider, GoogleGenAIProvider):
+        return provider._get_client()
+    return None
 
 
 def get_target_config():
-    """Retorna la configuración de generación estándar para el modelo objetivo."""
+    """Config de generación google-genai (solo válida para backend Gemini)."""
     from google.genai import types
     return types.GenerateContentConfig(
         temperature=0.0,
@@ -63,55 +98,5 @@ def get_target_config():
 
 
 def extract_text(resp) -> str:
-    """
-    Extrae texto de respuesta google-genai de forma segura.
-    Maneja safety blocks, candidatos vacíos, y errores.
-    """
-    try:
-        candidates = getattr(resp, "candidates", None)
-        if not candidates:
-            return "BLOCKED_OR_ERROR: empty candidates (possible safety block)"
-        
-        finish = getattr(candidates[0], "finish_reason", None)
-        finish_name = str(getattr(finish, "name", finish) or "").upper()
-        if finish_name in {"SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII"}:
-            return f"BLOCKED_OR_ERROR: finish_reason={finish_name}"
-        
-        text = resp.text
-        return text if text else "BLOCKED_OR_ERROR: empty text"
-    except Exception as e:
-        return f"BLOCKED_OR_ERROR: extraction failed: {e}"
-
-
-async def call_target_async(prompt: str) -> str:
-    """Llama al modelo objetivo de forma asíncrona."""
-    client = get_genai_client()
-    if client is None:
-        return "BLOCKED_OR_ERROR: client not initialized"
-    
-    try:
-        resp = await client.aio.models.generate_content(
-            model=TARGET_MODEL,
-            contents=prompt,
-            config=get_target_config(),
-        )
-        return extract_text(resp)
-    except Exception as e:
-        return f"BLOCKED_OR_ERROR: {e}"
-
-
-def call_target_sync(prompt: str) -> str:
-    """Llama al modelo objetivo de forma síncrona (para tools ADK)."""
-    client = get_genai_client()
-    if client is None:
-        return "BLOCKED_OR_ERROR: client not initialized"
-    
-    try:
-        resp = client.models.generate_content(
-            model=TARGET_MODEL,
-            contents=prompt,
-            config=get_target_config(),
-        )
-        return extract_text(resp)
-    except Exception as e:
-        return f"BLOCKED_OR_ERROR: {e}"
+    """Extrae texto de una respuesta google-genai cruda (compat)."""
+    return GoogleGenAIProvider._extract(resp)

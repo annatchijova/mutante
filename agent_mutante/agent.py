@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
 
-from engine.mutator import MutationEngine
+from engine.mutator import MutationEngine, MUTATIONS_V2
 from engine.mutante_semiotic_evaluator import evaluate_bypass
 from engine.bayesian import ThompsonSamplingOrchestrator
 from engine.quality_gate import BypassQualityGate
@@ -27,7 +27,10 @@ from engine.mutante_client import call_target_sync, TARGET_MODEL, AGENT_MODEL
 
 load_dotenv()
 
-_MUTATIONS = ["rot13", "base64_encode", "mirror", "scramble", "zigzag"]
+_MUTATIONS = [
+    m.strip() for m in os.getenv("MUTANTE_MUTATIONS", ",".join(MUTATIONS_V2)).split(",")
+    if m.strip()
+]
 _mutator = MutationEngine()
 _bandit = ThompsonSamplingOrchestrator(_MUTATIONS)
 _gate = BypassQualityGate()

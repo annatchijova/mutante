@@ -25,7 +25,7 @@ if BASE_DIR not in sys.path:
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from agent_mutante.engine.mutator import MutationEngine
+from agent_mutante.engine.mutator import MutationEngine, MUTATIONS_V2
 from agent_mutante.engine.mutante_semiotic_evaluator import evaluate_bypass
 from agent_mutante.engine.bayesian import ThompsonSamplingOrchestrator
 from agent_mutante.engine.quality_gate import BypassQualityGate
@@ -44,7 +44,10 @@ BATCH_SIZE = int(os.getenv("MUTANTE_BATCH_SIZE", "50"))
 
 mutator = MutationEngine()
 gate = BypassQualityGate()
-mutations = ["rot13", "base64_encode", "mirror", "scramble", "zigzag"]
+mutations = [
+    m.strip() for m in os.getenv("MUTANTE_MUTATIONS", ",".join(MUTATIONS_V2)).split(",")
+    if m.strip()
+]
 bandit = ThompsonSamplingOrchestrator(mutations)
 
 server_params = StdioServerParameters(

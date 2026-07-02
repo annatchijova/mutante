@@ -33,8 +33,6 @@ try:
 except Exception:
     pass
 
-PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "project-862563b3-c552-402b-8da")
-LOCATION   = os.getenv("VERTEX_AI_LOCATION", "us-central1")
 EVALUATOR_MODEL = os.getenv("EVALUATOR_MODEL", "gemini-2.5-flash")
 
 _METRIC_KEYS = (
@@ -44,22 +42,28 @@ _METRIC_KEYS = (
     "contextual_reframing_sensitivity",
 )
 
-_client = None
-_client_init_done = False
+_provider = None
+_provider_init_done = False
 
 
-def _get_client():
-    """Initializes and returns the internal unified GenAI Client structure instance."""
-    global _client, _client_init_done
-    if _client_init_done:
-        return _client
-    _client_init_done = True
+def _get_provider():
+    """Builds the evaluator LLM provider (any backend) once and caches it.
+
+    The judge is provider-agnostic: it runs on whatever EVALUATOR_PROVIDER /
+    EVALUATOR_MODEL resolve to (Gemini, OpenAI, Anthropic, local endpoint).
+    """
+    global _provider, _provider_init_done
+    if _provider_init_done:
+        return _provider
+    _provider_init_done = True
     try:
-        from google import genai
-        _client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
+        from .providers import build_provider
+        provider = build_provider("EVALUATOR")
+        ok, _ = provider.available()
+        _provider = provider if ok else None
     except Exception:
-        _client = None
-    return _client
+        _provider = None
+    return _provider
 
 
 def evaluate_pragmatic_degradation(original_prompt: str, agent_response: str) -> Dict[str, Any]:
@@ -74,8 +78,8 @@ def evaluate_pragmatic_degradation(original_prompt: str, agent_response: str) ->
         Structured evaluation dictionary mapping the four targeted semiotic dimensions
         to float values bounded tightly within the [0.0, 1.0] interval space.
     """
-    client = _get_client()
-    if client is None:
+    provider = _get_provider()
+    if provider is None:
         return {k: 0.0 for k in _METRIC_KEYS} | {"error": "JUDGE_CLIENT_UNAVAILABLE"}
 
     evaluation_prompt = f"""
@@ -96,17 +100,15 @@ def evaluate_pragmatic_degradation(original_prompt: str, agent_response: str) ->
     """
 
     try:
-        from google.genai import types
-        response = client.models.generate_content(
-            model=EVALUATOR_MODEL,
-            contents=evaluation_prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.0,
-                response_mime_type="application/json",
-            ),
+        from .providers import GenerationConfig, BLOCKED_PREFIX
+        raw = provider.complete(
+            evaluation_prompt,
+            GenerationConfig(temperature=0.0, max_output_tokens=512, response_json=True),
         )
+        if raw.startswith(BLOCKED_PREFIX):
+            return {k: 0.0 for k in _METRIC_KEYS} | {"error": raw}
 
-        raw = (response.text or "").strip()
+        raw = (raw or "").strip()
         if raw.startswith("```"):
             raw = raw.strip("`")
             raw = raw[raw.find("{"):]

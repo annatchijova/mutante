@@ -4,6 +4,14 @@
 # MIGRATION PATHWAY: google-genai replaces vertexai.generative_models (deprecated 24/06/2026).
 # Note: The underlying vertexai core package is retained for internal compatibility hooks within ADK.
 
+# --- Multi-provider LLM layer ---
+# La capa agent_mutante/engine/providers soporta Gemini (Vertex + AI Studio),
+# OpenAI y compatibles (OpenRouter/Groq/Together/Ollama/vLLM...) y Anthropic.
+# OpenAI/Anthropic se acceden vía HTTP (aiohttp/urllib) — NO requieren SDK extra.
+# Los SDK oficiales son opcionales y solo si se prefieren sobre el cliente HTTP:
+#   openai>=1.0.0
+#   anthropic>=0.39.0
+
 # --- Google Cloud & Generative AI Infrastructure ---
 google-genai                          # Unified GenAI SDK Architecture (replacing vertexai.generative_models)
 google-adk==2.0.0                     # Agent Development Kit
