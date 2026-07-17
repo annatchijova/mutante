@@ -39,11 +39,9 @@ def fetch() -> pd.DataFrame:
             
         resp = client.search(
             index="mutante-audits",
-            body={
-                "query": {"match_all": {}},
-                "size": 500,
-                "sort": [{"_doc": {"order": "desc"}}],
-            },
+            query={"match_all": {}},
+            size=500,
+            sort=[{"_doc": {"order": "desc"}}],
         )
     except Exception as e:
         st.error(f"Telemetry retrieval failed: {e}")

@@ -143,6 +143,13 @@ def _es_client() -> Elasticsearch:
 
 
 async def process_prompt(session, prompt, global_idx, sem, stats, cp_fh, out_fh):
+    async with sem:
+        return await _process_prompt_inner(
+            session, prompt, global_idx, stats, cp_fh, out_fh
+        )
+
+
+async def _process_prompt_inner(session, prompt, global_idx, stats, cp_fh, out_fh):
     mutation = bandit.select_mutation()
     mutated = mutator.apply(prompt, mutation)
     response = await call_target_async(mutated)

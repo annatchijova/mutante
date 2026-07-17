@@ -94,6 +94,18 @@ def test_unknown_mutation_is_identity():
     assert eng.apply("texto", "no_existe") == "texto"
 
 
+def test_scramble_is_deterministic():
+    """The engine guarantees reproducible forensic traces: scramble must be stable across runs."""
+    eng = MutationEngine()
+    sample = "How does this obfuscation transformation actually work in practice"
+    first = eng.apply(sample, "scramble")
+    second = eng.apply(sample, "scramble")
+    assert first == second, "scramble produced different output on repeat — traces are not reproducible"
+    # First and last letters of each word are preserved by the transformation.
+    for out_word, src_word in zip(first.split(), sample.split()):
+        assert out_word[0] == src_word[0] and out_word[-1] == src_word[-1]
+
+
 # --- Semiotic Deterministic Evaluator Tests ---
 
 def test_refusal_is_blocked():
@@ -210,6 +222,7 @@ if __name__ == "__main__":
     offline_tests = [
         test_all_mutations_dispatch,
         test_unknown_mutation_is_identity,
+        test_scramble_is_deterministic,
         test_refusal_is_blocked,
         test_benign_is_not_bypassed,
         test_compliance_raises_jcs,

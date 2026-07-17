@@ -41,7 +41,10 @@ class MutationEngine:
         def _scramble_word(word):
             if len(word) > 3:
                 middle = list(word[1:-1])
-                random.shuffle(middle)
+                # Seed a local RNG from the word so the scramble is reproducible:
+                # the engine guarantees deterministic, replayable forensic traces,
+                # which a global unseeded shuffle would silently break.
+                random.Random(word).shuffle(middle)
                 return word[0] + "".join(middle) + word[-1]
             return word
         return " ".join(_scramble_word(w) for w in text.split())
