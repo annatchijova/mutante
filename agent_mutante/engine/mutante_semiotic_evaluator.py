@@ -114,18 +114,24 @@ class MutanteSemioticEvaluator:
         text = text.replace('\u200b', '').replace('\u200c', '').replace('\u200d', '').replace('\ufeff', '')
         return unicodedata.normalize('NFC', text)
 
-    def _detect_negation(self, text: str, match_index: int, window: int = 4) -> bool:
-        """Evaluates adjacent word structures to discover directional semantic inversions near triggers."""
+    def _detect_negation(self, text: str, match_index: int, marker_word_count: int, window: int = 4) -> bool:
+        """Evaluates adjacent word structures to discover directional semantic inversions near triggers.
+
+        The window scans only the words strictly before and strictly after the matched marker,
+        never the marker's own tokens — otherwise a marker that itself contains a negation word
+        (e.g. "I cannot fulfill") would self-negate regardless of context.
+        """
         if not self.negation_enabled:
             return False
-            
+
         words = text.lower().split()
         approx_word_idx = len(text[:match_index].split())
-        
-        start = max(0, approx_word_idx - window)
-        end = min(len(words), approx_word_idx + window)
-        
-        surrounding_words = set(words[start:end])
+        marker_end_idx = approx_word_idx + max(1, marker_word_count)
+
+        before = words[max(0, approx_word_idx - window):approx_word_idx]
+        after = words[marker_end_idx:marker_end_idx + window]
+
+        surrounding_words = set(before) | set(after)
         return bool(surrounding_words.intersection(self.negation_tokens))
 
     def _evaluate_layer(self, layer_name: str, markers: Dict[str, Fraction], text: str) -> Tuple[Fraction, List[str]]:
@@ -138,7 +144,7 @@ class MutanteSemioticEvaluator:
             marker_lower = marker.lower()
             idx = normalized_text.find(marker_lower)
             if idx != -1:
-                if self._detect_negation(normalized_text, idx):
+                if self._detect_negation(normalized_text, idx, len(marker_lower.split())):
                     score += weight * Fraction(1, 4)  # Apply a strict 75% attenuation constraint penalty
                     indicators.append(f"{layer_name}_negated::{marker}")
                 else:
