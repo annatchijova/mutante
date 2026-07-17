@@ -273,13 +273,7 @@ def discover_attack_families(max_docs: int = 1000, sim_threshold: float = 0.82) 
     docs = [d for d in docs if d.get("prompt_vector")]
     if not docs:
         return []
-    docs = [d for d in docs if d.get("prompt_vector")]
-    if not docs:
-        return []
-    docs = [d for d in docs if d.get("prompt_vector")]
-    if not docs:
-        return []
-    vecs = np.array([d["prompt_vector"] for d in docs], dtype=float)  
+    vecs = np.array([d["prompt_vector"] for d in docs], dtype=float)
 
     assigned = [False] * len(docs)
     clusters: List[Dict[str, Any]] = []

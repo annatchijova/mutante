@@ -44,11 +44,9 @@ def fetch() -> pd.DataFrame:
 
         resp = client.search(
             index="mutante-audits",
-            body={
-                "query": {"match_all": {}},
-                "size": 1000,
-                "sort": [{"_doc": {"order": "desc"}}],
-            },
+            query={"match_all": {}},
+            size=1000,
+            sort=[{"_doc": {"order": "desc"}}],
         )
     except Exception:
         # Surfaced as a styled "no signal" state by the renderer, not a raw trace.
