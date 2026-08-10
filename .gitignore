@@ -5,6 +5,7 @@ service-account-key.json
 
 # Datasets (no públicos)
 jailbreaks_dataset*.csv
+jailbreaks_demo*.csv
 harmbench_behaviors.csv
 
 # Checkpoints y basura
