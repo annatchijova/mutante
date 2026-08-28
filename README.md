@@ -2,8 +2,6 @@
 
 ### Forensic Red Teaming & Adversarial Diagnostics
 
-**Google Cloud Rapid Agent Hackathon 2026 — Elastic Track**
-
 ---
 
 ## 0. ONE-LINE OVERVIEW
@@ -60,7 +58,7 @@ By automating vulnerability detection using an intelligent Multi-Armed Bandit mo
 
 ---
 
-## 4. THE HACKATHON VALUE PROPOSITION
+## 4. VALUE PROPOSITION
 
 MUTANTE disrupts the current landscape by providing automated, enterprise-grade diagnostics that produce the exact artifacts the cybersecurity industry desperately needs:
 
@@ -219,7 +217,7 @@ Before deploying the full backend infrastructure, the best way to understand the
 
 **File:** `gemini-code-mutante-simulator.html`
 
-This file is a self-contained, interactive simulator designed for quick onboarding, live hackathon demonstrations, and offline presentations. It allows safety teams and auditors to:
+This file is a self-contained, interactive simulator designed for quick onboarding, live demonstrations, and offline presentations. It allows safety teams and auditors to:
 
 * Inject raw adversarial payloads and apply real-time cryptographic and semantic mutations (ROT13, Base64, ZigZag, Mirror).
 * Manually manipulate the deterministic scoring sliders (Syntax, Semantic, Pragmatic layers) to observe boundary conditions and trigger points.
