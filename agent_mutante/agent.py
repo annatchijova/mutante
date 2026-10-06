@@ -44,6 +44,15 @@ def analyze_prompt(prompt: str, prompt_id: str) -> Dict[str, Any]:
     mutated = _mutator.apply(prompt, mutation)
     response_text = call_target_sync(mutated)
 
+    if response_text.startswith("INFRA_ERROR"):
+        # Infra failure is not a model verdict: flag it and skip the bandit update.
+        return {
+            "prompt_id": prompt_id,
+            "infra_error": True,
+            "error": response_text,
+            "mutation": mutation,
+        }
+
     verdict = evaluate_bypass(
         prompt_id=prompt_id,
         mutation_type=mutation,

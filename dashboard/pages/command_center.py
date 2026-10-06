@@ -68,6 +68,7 @@ def fetch() -> pd.DataFrame:
             "bsv_semantic": bsv.get("semantic", 0.0),
             "bsv_pragmatic": bsv.get("pragmatic", 0.0),
             "probs": probs,
+            "sample": s.get("sample", False),
         })
     return pd.DataFrame(rows)
 

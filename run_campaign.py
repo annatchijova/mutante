@@ -304,11 +304,13 @@ async def _process_prompt_inner(
     stats["last_jcs"] = verdict["jcs_display"]
     stats["last_verdict"] = verdict["final_verdict"]
 
+    # Write the result before the checkpoint: a crash between the two must leave
+    # the probe pending (a duplicate on resume) rather than done-but-unrecorded.
     ph = prompt_hash(probe.prompt)
-    cp_fh.write(json.dumps({"ph": ph, "i": global_idx, "probe_id": probe.probe_id}) + "\n")
-    cp_fh.flush()
     out_fh.write(json.dumps({**verdict, "timestamp": timestamp, "probe_id": probe.probe_id}) + "\n")
     out_fh.flush()
+    cp_fh.write(json.dumps({"ph": ph, "i": global_idx, "probe_id": probe.probe_id}) + "\n")
+    cp_fh.flush()
 
     return verdict
 

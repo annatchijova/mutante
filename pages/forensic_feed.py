@@ -63,6 +63,7 @@ def fetch() -> pd.DataFrame:
             "original_prompt": s.get("original_prompt", ""),
             "mutated_prompt": s.get("mutated_prompt", ""),
             "response": s.get("raw_response", ""),
+            "sample": s.get("sample", False),
         })
     return pd.DataFrame(rows)
 

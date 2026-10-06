@@ -153,3 +153,38 @@ call_target_async raises / client None
 - Wire `sandboxed_mcp_spawn`'s env scrubbing into the campaign spawn path (needs an MCP-transport-compatible way to pass `preexec_fn`, or scrub `env` inline).
 - `quality_gate` reads all of `campaign_results.jsonl` to take the last 100 — O(file) tail; fine at current scale.
 - `from main import _BQVerdict` inside the per-prompt loop couples campaign code to the Streamlit app module; works via import caching, but fragile.
+
+---
+
+## Red Team Round 3 — Emergent / architectural
+
+**Method:** composition breaks, trust-boundary gaps, authority/provenance loss across the write path (checkpoint → results → Elastic → BigQuery), the ADK agent sibling (`agent.py`), seed tooling (`reseed_elastic.py`), and both dashboard trees (`pages/`, `dashboard/pages/` — verified identical).
+
+| ID | Severity | Level | Module | Finding |
+|----|----------|-------|--------|---------|
+| RT-16 | Low | CODE FACT | `run_campaign.py` | Write-order hazard: checkpoint flushed **before** the result row — a crash in between loses the verdict AND burns the probe (marked done). Swapped: result first, checkpoint second — a crash now leaves a retryable probe |
+| RT-17 | Medium | CONFIRMED BY INDUCTION | `agent.py` | RT-10 sibling: `analyze_prompt` evaluated `INFRA_ERROR`/`BLOCKED_OR_ERROR` strings as responses and trained `_bandit` on them. Fixed symmetrically; induction: stubbed INFRA_ERROR → flagged dict, bandit stays at prior 0.5, `_session_verdicts` empty |
+| RT-18 | Low | CODE FACT | dashboards + `elastic_semantic.py` | `sample: true` was written by `reseed_elastic` but never surfaced at read time — synthetic demo docs and real campaign verdicts were indistinguishable in `mutante-audits`/`mutante-semantic` consumers. Fixed: `sample` now propagates through `index_probe_semantic`, `fetch_probes`, `find_similar_attacks`, `discover_attack_families`, and the audit-index row builders (`forensic_feed`, `command_center`, both trees) |
+| RT-19 | Info | CODE FACT | `reseed_elastic.py` | Verified honest-degradation done right: `sample:true` on both docs, redacted prompts, `--wipe` explicit, `--dry-run` mirror. Hypothesis "demo data contaminates forensic index silently" — FALSIFIED at write side; gap was read-side only (RT-18) |
+| RT-20 | Info | CODE FACT | `semiotic_llm_judge.py` | Judge degrades honestly: any failure sets `error` → `degradation_vector_to_jcs_boost` returns 0.0 → hybrid converges to deterministic score. No silent partial contribution |
+
+### Round-3 verification
+
+- `python3 test_demo_pipeline.py`: **16/16 offline tests pass**; `test_bayesian.py`: **6/6 pass**. The one manual-runner failure (`test_integration_demo_set_runs`) is a pre-existing live-integration smoke test requiring `agent_mutante/engine` on sys.path and a live target — not a regression.
+- `run_campaign.py --dry-run` (fresh process, warm sync-versions): 7,497 probes — cold-cache path holds.
+- `agent.analyze_prompt` with stubbed `INFRA_ERROR` → `{infra_error: true}`, bandit posterior untouched.
+
+### Round-3 discarded vectors
+
+| Vector | Result | Why |
+|--------|--------|-----|
+| Synthetic docs contaminating forensic indices | FALSIFIED at write side | `reseed_elastic` marks `sample:true` on both docs; gap was consumer-side only (RT-18) |
+| LLM judge partial output on failure | FALSIFIED | `error` key → boost 0.0; no partial contribution path |
+| Dashboard divergence (`pages/` vs `dashboard/pages/`) | FALSIFIED as a drift bug | trees are identical copies (diff: only `__init__.py`/`__pycache__`); duplication is a maintenance smell, not a correctness bug — recorded below |
+
+### Round-3 recommendations (recorded, not acted on)
+
+- `pages/` and `dashboard/pages/` are a byte-identical copy — pick one or generate one from the other; every future dashboard fix otherwise lands twice.
+- ES|QL analytics queries (`ESQL_*`) do not exclude `sample:true` docs — aggregate stats mix synthetic and real telemetry. Decide per-page whether the view is demo or forensic and filter explicitly.
+- Two concurrent campaign processes share `campaign_results.jsonl`/`campaign_checkpoint.jsonl` with no lock; large audit rows can interleave mid-line. A lockfile or per-run file naming would close it.
+- `attack_family_report` averages `jcs` mixing hybrid and deterministic provenance (RT-11 residual) — the new `evaluator`/`sample` fields make a filtered variant easy when wanted.

@@ -181,6 +181,7 @@ def index_probe_semantic(payload: Dict[str, Any]) -> str:
         "jcs":             float(payload.get("hybrid_jcs", payload.get("jcs_display", 0)) or 0),
         "indicators":      payload.get("indicators", []),
         "timestamp":       payload.get("timestamp"),
+        "sample":          bool(payload.get("sample", False)),
         "prompt_vector":   vector,
     }
     try:
@@ -207,7 +208,7 @@ def find_similar_attacks(query_text: str, k: int = 10) -> List[Dict[str, Any]]:
             "k": k,
             "num_candidates": max(50, k * 10),
         },
-        source=["prompt_id", "original_prompt", "mutation", "final_verdict", "jcs"],
+        source=["prompt_id", "original_prompt", "mutation", "final_verdict", "jcs", "sample"],
         size=k,
     )
     out = []
@@ -220,6 +221,7 @@ def find_similar_attacks(query_text: str, k: int = 10) -> List[Dict[str, Any]]:
             "mutation":      s.get("mutation"),
             "final_verdict": s.get("final_verdict"),
             "jcs":           s.get("jcs"),
+            "sample":        bool(s.get("sample", False)),
         })
     return out
 
@@ -263,7 +265,7 @@ def discover_attack_families(max_docs: int = 1000, sim_threshold: float = 0.82) 
     resp = es.search(
         index=SEMANTIC_INDEX,
         query={"match_all": {}},
-        source=["prompt_id", "original_prompt", "mutation", "final_verdict", "jcs", "prompt_vector"],
+        source=["prompt_id", "original_prompt", "mutation", "final_verdict", "jcs", "prompt_vector", "sample"],
         size=max_docs,
     )
     hits = resp.get("hits", {}).get("hits", [])
@@ -306,7 +308,7 @@ def fetch_probes(max_docs: int = 2000, include_vectors: bool = True) -> List[Dic
     es = _get_es()
     if es is None:
         return []
-    fields = ["prompt_id", "mutation", "final_verdict", "jcs"]
+    fields = ["prompt_id", "mutation", "final_verdict", "jcs", "sample"]
     if include_vectors:
         fields.append("prompt_vector")
     resp = es.search(
