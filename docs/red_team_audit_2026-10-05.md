@@ -108,3 +108,48 @@ CODE FACT · PLAUSIBLE HYPOTHESIS · CONFIRMED BY INDUCTION · FALSIFIED
 - `_load_json` ignores `_limit` before normalization.
 - `session` parameter in `process_prompt`/`_process_prompt_inner` is accepted but unused — pre-existing.
 - `enable`/`disable`/`configure` registry APIs exist but nothing exercises them; untested paths.
+
+---
+
+## Red Team Round 2 — Variant analysis
+
+**Method:** each Round-1 bug was abstracted to an invariant (`sink + precondition + violated invariant`) and hunted across sibling implementations and adjacent layers (`beyond-the-sink`). Scope expanded to `mutante_client.py`, `mcp_mutante.py`, `elastic_semantic.py`, `sandbox.py`, `mutante_hybrid_evaluator.py`.
+
+| ID | Severity | Level | Module | Finding |
+|----|----------|-------|--------|---------|
+| RT-10 | Medium | CONFIRMED BY INDUCTION | `mutante_client.py` + `run_campaign.py` | Infra failures (`BLOCKED_OR_ERROR: HTTP 503`, client not initialized) were evaluated as model responses → verdict BLOCKED → `bandit.update(mutation, False)` trains the Thompson sampler on outage noise AND the checkpoint marks the probe done, so a transient error permanently consumes it |
+| RT-11 | Low | CODE FACT | `elastic_semantic.py` | `final_verdict` collapses to `hybrid_verdict` when present — downstream consumers cannot distinguish deterministic from LLM-influenced verdicts (provenance lost at the index boundary) |
+| RT-12 | Low | CONFIRMED BY INDUCTION | `mcp_mutante.py` | Sibling mutation implementation diverged: `mirror` did whole-string reversal vs the engine's per-word; `base64`/`espejo` aliases vs registry names; unknown mutation silently returned the prompt **unmutated**; dataset loaded unfiltered (514 benign rows served as attacks) |
+| RT-13 | Low | CODE FACT | `run_campaign.py` vs `sandbox.py` | `sandboxed_mcp_spawn` (rlimits + env scrubbing) exists but nothing calls it — campaign spawns MCP via `StdioServerParameters(command="python", env={**os.environ})`: hardcoded `python` (RT-9 variant — crashes where only `python3` exists) and full env passthrough with no sandbox |
+| RT-14 | Medium | CODE FACT | `mutante_hybrid_evaluator.py` | Architectural invariant deviation vs CLAUDE.md §5.1: `evaluate_bypass_hybrid` adds an LLM-judged `llm_boost` (×2.5 weight) to the deterministic JCS — the LLM can push a deterministic sub-threshold score over `HYBRID_BYPASS_THRESHOLD` and flip the verdict. Mitigants: separate `hybrid_verdict` field, `evaluator: "hybrid"` tag. **Not fixed** — flagged for maintainer decision (design intent vs. stated invariant) |
+| RT-15 | Low | CONFIRMED BY INDUCTION | `probe_sources` `load()` | Latent bug surfaced by the RT-8 fix: version file said "synced" but probes were never persisted — a fresh process with warm sync-version files loaded 0. File-based sources now re-sync whenever the in-memory cache is empty |
+
+### RT-10 — causal chain and verification
+```
+call_target_async raises / client None
+    → returns "BLOCKED_OR_ERROR: <e>" as if it were model text
+    → evaluate_bypass → BLOCKED, jcs 0/1   [induction: evaluated twice, 0/1 both]
+    → bandit.update(mutation, False)      [outage trains "this mutation fails"]
+    → cp_fh.write({ph})                   [probe marked done — never retried on resume]
+```
+**Fix:** `mutante_client` emits distinct `INFRA_ERROR:` for infra paths (`extract_text`'s `BLOCKED_OR_ERROR` stays for genuine model-side safety blocks). `_process_prompt_inner` detects it: writes a flagged `{infra_error: true}` record to results, skips `bandit.update`, skips the checkpoint write, counts `stats["infra_err"]`; the end-of-campaign quality gate filters flagged rows.
+**Induction:** `_process_prompt_inner` with stubbed `INFRA_ERROR` response → flagged record written, checkpoint empty, `bandit.get_probs()` unchanged.
+
+### RT-13 — verification
+`grep sandboxed_mcp_spawn` → only its own definition. `command="python"` → `sys.executable`. The rlimit/env-scrub sandbox remains unwired (`StdioServerParameters` has no `preexec_fn` channel) — recorded as a gap, not silently wired.
+
+### Round-2 discarded vectors
+
+| Vector | Result | Why |
+|--------|--------|-----|
+| Floats in `bsv`/layer scores corrupting canonical verdict | FALSIFIED | canonical `jcs` is stored as `"num/den"` Fraction string; floats are display/telemetry only, derived deterministically from Fractions |
+| `evaluate_bypass` category kwarg mismatch | FALSIFIED | signature accepts `category`; verdict returns it; audit_payload consistent |
+| MCP `indexar_brecha_en_elastic` arbitrary JSON index | Hygiene | stdio-local tool, caller-trusted boundary; no auth model promised |
+| `python` literal elsewhere | one hit fixed | `StdioServerParameters(command="python")` → `sys.executable`; no other literal found |
+
+### Round-2 recommendations (recorded, not acted on)
+
+- Decide the fate of the hybrid evaluator (RT-14): either document the deliberate §5.1 exception in the module + downstream schema, or gate `hybrid_verdict` behind an explicit opt-in so it can never masquerade as a deterministic verdict.
+- Wire `sandboxed_mcp_spawn`'s env scrubbing into the campaign spawn path (needs an MCP-transport-compatible way to pass `preexec_fn`, or scrub `env` inline).
+- `quality_gate` reads all of `campaign_results.jsonl` to take the last 100 — O(file) tail; fine at current scale.
+- `from main import _BQVerdict` inside the per-prompt loop couples campaign code to the Streamlit app module; works via import caching, but fragile.

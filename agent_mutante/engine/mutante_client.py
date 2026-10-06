@@ -87,7 +87,7 @@ async def call_target_async(prompt: str) -> str:
     """Llama al modelo objetivo de forma asíncrona."""
     client = get_genai_client()
     if client is None:
-        return "BLOCKED_OR_ERROR: client not initialized"
+        return "INFRA_ERROR: client not initialized"
     
     try:
         resp = await client.aio.models.generate_content(
@@ -97,14 +97,14 @@ async def call_target_async(prompt: str) -> str:
         )
         return extract_text(resp)
     except Exception as e:
-        return f"BLOCKED_OR_ERROR: {e}"
+        return f"INFRA_ERROR: {e}"
 
 
 def call_target_sync(prompt: str) -> str:
     """Llama al modelo objetivo de forma síncrona (para tools ADK)."""
     client = get_genai_client()
     if client is None:
-        return "BLOCKED_OR_ERROR: client not initialized"
+        return "INFRA_ERROR: client not initialized"
     
     try:
         resp = client.models.generate_content(
@@ -114,4 +114,4 @@ def call_target_sync(prompt: str) -> str:
         )
         return extract_text(resp)
     except Exception as e:
-        return f"BLOCKED_OR_ERROR: {e}"
+        return f"INFRA_ERROR: {e}"

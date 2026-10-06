@@ -177,6 +177,7 @@ def index_probe_semantic(payload: Dict[str, Any]) -> str:
         "original_prompt": original_prompt,
         "mutation":        payload.get("mutation", payload.get("mutation_type", "unknown")),
         "final_verdict":   payload.get("hybrid_verdict", payload.get("final_verdict", "")),
+        "evaluator":       "hybrid" if "hybrid_verdict" in payload else payload.get("evaluator", "deterministic"),
         "jcs":             float(payload.get("hybrid_jcs", payload.get("jcs_display", 0)) or 0),
         "indicators":      payload.get("indicators", []),
         "timestamp":       payload.get("timestamp"),

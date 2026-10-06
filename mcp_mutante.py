@@ -6,8 +6,6 @@
 import os
 import sys
 import json
-import base64
-import codecs
 from dotenv import load_dotenv
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -18,6 +16,7 @@ if BASE_DIR not in sys.path:
 
 from mcp.server.fastmcp import FastMCP
 from agent_mutante.engine.mutante_semiotic_evaluator import evaluate_bypass
+from agent_mutante.probe_sources.mutation_source import MutationSourceRegistry
 
 # Elastic Cloud opcional
 CLOUD_ID = os.getenv("ELASTIC_CLOUD_ID", "")
@@ -48,6 +47,8 @@ dataset_idx = 0
 if os.path.exists(DATASET_PATH):
     try:
         df = pd.read_csv(DATASET_PATH)
+        if "type" in df.columns:
+            df = df[df["type"] == "jailbreak"]
         if "prompt" in df.columns:
             dataset_rows = df["prompt"].dropna().tolist()
         print(f"[+] Dataset cargado: {len(dataset_rows)} prompts", file=sys.stderr)
@@ -58,28 +59,29 @@ else:
 
 mcp = FastMCP("Mutante-RedTeam")
 
+_MUTATION_ALIASES = {"base64": "base64_encode", "espejo": "mirror"}
+
+
 @mcp.tool()
 def generate_mutated_attack(mutation_type: str) -> str:
     """Extrae un prompt del dataset y le aplica la mutación solicitada."""
     global dataset_idx
     if not dataset_rows:
         return "ERROR: No dataset loaded"
-    
+
+    name = _MUTATION_ALIASES.get(mutation_type.lower(), mutation_type.lower())
+    engine = MutationSourceRegistry.get(name)
+    if engine is None:
+        available = ", ".join(MutationSourceRegistry.get_names())
+        return f"ERROR: unknown mutation '{mutation_type}'. Available: {available}"
+
     if dataset_idx >= len(dataset_rows):
         dataset_idx = 0
-    
+
     base_prompt = dataset_rows[dataset_idx]
     dataset_idx += 1
-    
-    mutation_lower = mutation_type.lower()
-    if mutation_lower == "base64":
-        return base64.b64encode(base_prompt.encode("utf-8")).decode("utf-8")
-    elif mutation_lower == "rot13":
-        return codecs.encode(base_prompt, "rot_13")
-    elif mutation_lower in ("mirror", "espejo"):
-        return base_prompt[::-1]
-    
-    return base_prompt
+
+    return engine.apply(base_prompt)
 
 @mcp.tool()
 def evaluate_bayesian_breach(prompt_id: str, mutation_type: str, agent_response: str) -> str:

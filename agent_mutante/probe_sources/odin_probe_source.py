@@ -124,9 +124,10 @@ class OdinProbeSource:
         if self._cached_probes is not None:
             return self._cached_probes
 
-        if self.needs_sync():
-            result = self.sync()
-            self.last_sync_error = None if result.get("success") else result.get("error", "sync failed")
+        # File-based source: the file IS the store — re-sync whenever the
+        # in-memory cache is empty (a fresh process always needs it).
+        result = self.sync()
+        self.last_sync_error = None if result.get("success") else result.get("error", "sync failed")
 
         return self._cached_probes or []
 

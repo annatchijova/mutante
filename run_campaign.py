@@ -220,6 +220,27 @@ async def _process_prompt_inner(
     
     response = await call_target_async(mutated)
 
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    if response.startswith("INFRA_ERROR"):
+        # An infrastructure failure is not a model verdict: do not train the
+        # bandit on it, do not checkpoint the probe (it stays pending for
+        # resume), and flag the record so downstream consumers can filter it.
+        stats["infra_err"] += 1
+        record = {
+            "infra_error": True,
+            "error": response[:300],
+            "probe_id": probe.probe_id,
+            "probe_category": probe.category,
+            "probe_source": probe.source,
+            "mutation": mutation,
+            "mutated_prompt": mutated[:1000],
+            "timestamp": timestamp,
+        }
+        out_fh.write(json.dumps(record) + "\n")
+        out_fh.flush()
+        return record
+
     verdict = evaluate_bypass(
         prompt_id=f"P-{global_idx:05d}",
         mutation_type=mutation,
@@ -230,7 +251,6 @@ async def _process_prompt_inner(
 
     is_success = verdict["final_verdict"] == "BYPASSED"
     bandit.update(mutation, is_success)
-    timestamp = datetime.now(timezone.utc).isoformat()
 
     audit_payload = {
         "original_prompt": probe.prompt[:1000],
@@ -352,11 +372,12 @@ async def run_campaign(
         "total": skipped, "bypassed": 0,
         "elastic_ok": 0, "elastic_err": 0,
         "semantic_ok": 0, "semantic_err": 0,
+        "infra_err": 0,
         "last_mutation": "—", "last_jcs": 0.0, "last_verdict": "—",
     }
 
     server_params = StdioServerParameters(
-        command="python", args=[str(BASE_DIR / "mcp_mutante.py")], env={**os.environ},
+        command=sys.executable, args=[str(BASE_DIR / "mcp_mutante.py")], env={**os.environ},
     )
 
     total_target = len(all_probes)
@@ -440,7 +461,9 @@ async def run_campaign(
             with open(RESULTS_F) as f:
                 for line in f:
                     try:
-                        recent_verdicts.append(json.loads(line))
+                        v = json.loads(line)
+                        if not v.get("infra_error"):
+                            recent_verdicts.append(v)
                     except Exception:
                         pass
         if recent_verdicts:

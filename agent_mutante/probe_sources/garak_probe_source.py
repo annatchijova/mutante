@@ -139,7 +139,7 @@ class GarakProbeSource:
         if self._cached_probes is not None:
             return self._cached_probes
 
-        if self.needs_sync():
+        if self.needs_sync() or self._cached_probes is None:
             result = self.sync()
             self.last_sync_error = None if result.get("success") else result.get("error", "sync failed")
 
