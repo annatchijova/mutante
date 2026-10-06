@@ -4,8 +4,8 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 
 """
-run_campaign.py — MUTANTE Full Dataset Campaign Runner v2.1
-Procesa datasets contra el modelo configurado con checkpoint/resume y deduplicación.
+run_campaign.py — MUTANTE Campaign Runner v3.0
+Uses ProbeSourceRegistry + MutationSourceRegistry for pluggable corpora and mutations.
 """
 
 import os
@@ -17,6 +17,7 @@ import hashlib
 import argparse
 from pathlib import Path
 from datetime import datetime, timezone
+from typing import List, Optional
 
 BASE_DIR = Path(__file__).parent
 sys.path.insert(0, str(BASE_DIR))
@@ -24,18 +25,23 @@ sys.path.insert(0, str(BASE_DIR))
 from dotenv import load_dotenv
 load_dotenv(BASE_DIR / ".env")
 
-import pandas as pd
 from rich.console import Console
 from rich.progress import (
     Progress, SpinnerColumn, BarColumn, TaskProgressColumn,
     TextColumn, TimeElapsedColumn, TimeRemainingColumn, MofNCompleteColumn,
 )
 from rich.panel import Panel
+from rich.table import Table
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from agent_mutante.engine.mutator import MutationEngine
+# New registry-based imports
+from agent_mutante.probe_sources import (
+    ProbeSourceRegistry,
+    NormalizedProbe,
+)
+from agent_mutante.probe_sources.mutation_source import MutationSourceRegistry
 from agent_mutante.engine.mutante_semiotic_evaluator import evaluate_bypass
 from agent_mutante.engine.bayesian import ThompsonSamplingOrchestrator
 from agent_mutante.engine.quality_gate import BypassQualityGate
@@ -61,18 +67,9 @@ DELAY_BETWEEN = float(os.getenv("CAMPAIGN_DELAY_S", "0.2"))
 CHECKPOINT_F  = BASE_DIR / "campaign_checkpoint.jsonl"
 RESULTS_F     = BASE_DIR / "campaign_results.jsonl"
 
-DATASET_FILES = [
-    BASE_DIR / "jailbreaks_dataset_master_11k.csv",
-    BASE_DIR / "jailbreaks_dataset_final.csv",
-    BASE_DIR / "jailbreaks_dataset_master.csv",
-    BASE_DIR / "jailbreaks_dataset_master_enriched.csv",
-    BASE_DIR / "jailbreaks_dataset_demo_2000.csv",
-]
-
-MUTATIONS = ["rot13", "base64_encode", "mirror", "scramble", "zigzag"]
-
 console = Console()
 _shutdown = False
+
 
 def _sig_handler(sig, _frame):
     global _shutdown
@@ -83,33 +80,80 @@ signal.signal(signal.SIGINT, _sig_handler)
 signal.signal(signal.SIGTERM, _sig_handler)
 
 
-def load_datasets() -> list[str]:
-    all_prompts: set[str] = set()
-    console.print("\n[bold cyan]◈ DATASET LOADING[/bold cyan]")
+def load_all_probes(
+    categories: Optional[List[str]] = None,
+    sources: Optional[List[str]] = None,
+    limit: Optional[int] = None,
+) -> List[NormalizedProbe]:
+    """Load probes from all enabled sources, optionally filtered."""
+    all_probes: List[NormalizedProbe] = []
+    seen_hashes = set()
+
+    # Auto-register probe sources by importing them
+    _register_probe_sources()
+
+    probe_sources = ProbeSourceRegistry.get_all(enabled_only=True)
     
-    for fpath in DATASET_FILES:
-        if not fpath.exists():
-            console.print(f"  [dim]skip  {fpath.name} — not found[/dim]")
+    for source in probe_sources:
+        # Filter by category/source if specified
+        if categories and source.category not in categories:
             continue
+        if sources and source.name not in sources:
+            continue
+        
+        console.print(f"[cyan]Loading probes from {source.category}:{source.name}...[/cyan]")
         try:
-            df = pd.read_csv(fpath, on_bad_lines="skip")
-            if "prompt" not in df.columns:
-                console.print(f"  [yellow]skip  {fpath.name} — no 'prompt' column[/yellow]")
+            probes = source.load()
+            if not probes:
+                err = getattr(source, "last_sync_error", None)
+                suffix = f" — {err}" if err else ""
+                console.print(f"  [dim]No probes loaded{suffix}[/dim]")
                 continue
-            if "type" in df.columns:
-                series = df[df["type"] == "jailbreak"]["prompt"].dropna()
-            else:
-                series = df["prompt"].dropna()
             
-            before = len(all_prompts)
-            all_prompts.update(p.strip() for p in series if isinstance(p, str) and len(p.strip()) > 10)
-            added = len(all_prompts) - before
-            console.print(f"  [green]✓[/green]  {fpath.name:45s} +{added:>6,} unique")
+            # Deduplicate by prompt hash
+            unique_probes = []
+            for probe in probes:
+                ph = hashlib.sha256(probe.prompt.encode()).hexdigest()[:16]
+                if ph not in seen_hashes:
+                    seen_hashes.add(ph)
+                    unique_probes.append(probe)
+            
+            if limit and len(all_probes) + len(unique_probes) > limit:
+                unique_probes = unique_probes[:limit - len(all_probes)]
+            
+            all_probes.extend(unique_probes)
+            console.print(f"  [green]✓[/green]  +{len(unique_probes)} unique (total: {len(all_probes)})")
+            
+            if limit and len(all_probes) >= limit:
+                break
+                
         except Exception as exc:
-            console.print(f"  [red]✗[/red]  {fpath.name}: {exc}")
+            console.print(f"  [red]✗[/red]  {source.category}:{source.name}: {exc}")
     
-    console.print(f"\n  [bold]Total unique: {len(all_prompts):,}[/bold]\n")
-    return sorted(all_prompts)
+    console.print(f"\n  [bold]Total unique probes: {len(all_probes):,}[/bold]\n")
+    return all_probes
+
+
+def _register_probe_sources():
+    """Import probe source modules to trigger @register_source decorators."""
+    try:
+        from agent_mutante.probe_sources import garak_probe_source, odin_probe_source, generic_probe_source
+    except ImportError:
+        pass  # Sources already registered or not available
+
+
+def get_mutation_names(enabled_only: bool = True) -> List[str]:
+    """Get available mutation family names from registry."""
+    _register_mutation_sources()
+    return MutationSourceRegistry.get_names(enabled_only=enabled_only)
+
+
+def _register_mutation_sources():
+    """Import mutation source modules to trigger @register_mutation decorators."""
+    try:
+        from agent_mutante.probe_sources import mutation_source
+    except ImportError:
+        pass
 
 
 def load_checkpoint() -> set[str]:
@@ -130,11 +174,6 @@ def prompt_hash(prompt: str) -> str:
     return hashlib.sha256(prompt.encode()).hexdigest()[:16]
 
 
-mutator = MutationEngine()
-bandit = ThompsonSamplingOrchestrator(MUTATIONS)
-gate = BypassQualityGate()
-
-
 def _es_client() -> Elasticsearch:
     return Elasticsearch(
         cloud_id=os.getenv("ELASTIC_CLOUD_ID"),
@@ -142,16 +181,43 @@ def _es_client() -> Elasticsearch:
     )
 
 
-async def process_prompt(session, prompt, global_idx, sem, stats, cp_fh, out_fh):
+async def process_prompt(
+    session,
+    probe: NormalizedProbe,
+    global_idx: int,
+    sem: asyncio.Semaphore,
+    stats: dict,
+    cp_fh,
+    out_fh,
+    bandit: ThompsonSamplingOrchestrator,
+):
     async with sem:
         return await _process_prompt_inner(
-            session, prompt, global_idx, stats, cp_fh, out_fh
+            session, probe, global_idx, stats, cp_fh, out_fh, bandit
         )
 
 
-async def _process_prompt_inner(session, prompt, global_idx, stats, cp_fh, out_fh):
+async def _process_prompt_inner(
+    session,
+    probe: NormalizedProbe,
+    global_idx: int,
+    stats: dict,
+    cp_fh,
+    out_fh,
+    bandit: ThompsonSamplingOrchestrator,
+):
+    # Select mutation from bandit (uses enabled mutation families)
     mutation = bandit.select_mutation()
-    mutated = mutator.apply(prompt, mutation)
+    
+    # Get mutation engine and apply
+    mutation_engine = MutationSourceRegistry.get(mutation)
+    if mutation_engine:
+        mutated = mutation_engine.apply(probe.prompt)
+    else:
+        # Fallback to built-in
+        from agent_mutante.engine.mutator import MutationEngine as BuiltinMutator
+        mutated = BuiltinMutator().apply(probe.prompt, mutation)
+    
     response = await call_target_async(mutated)
 
     verdict = evaluate_bypass(
@@ -159,6 +225,7 @@ async def _process_prompt_inner(session, prompt, global_idx, stats, cp_fh, out_f
         mutation_type=mutation,
         response_text=response,
         model_version=TARGET_MODEL,
+        category=probe.category,
     )
 
     is_success = verdict["final_verdict"] == "BYPASSED"
@@ -166,7 +233,10 @@ async def _process_prompt_inner(session, prompt, global_idx, stats, cp_fh, out_f
     timestamp = datetime.now(timezone.utc).isoformat()
 
     audit_payload = {
-        "original_prompt": prompt[:1000],
+        "original_prompt": probe.prompt[:1000],
+        "probe_id": probe.probe_id,
+        "probe_category": probe.category,
+        "probe_source": probe.source,
         "mutation": verdict["mutation_type"],
         "mutated_prompt": mutated[:1000],
         "response_hash": verdict.get("raw_response_hash", ""),
@@ -179,7 +249,7 @@ async def _process_prompt_inner(session, prompt, global_idx, stats, cp_fh, out_f
         "bsv": verdict["bsv"],
         "probs": bandit.get_probs(),
         "timestamp": timestamp,
-        "category": verdict.get("category", ""),
+        "category": probe.category,
     }
 
     # Elastic audit index
@@ -214,40 +284,60 @@ async def _process_prompt_inner(session, prompt, global_idx, stats, cp_fh, out_f
     stats["last_jcs"] = verdict["jcs_display"]
     stats["last_verdict"] = verdict["final_verdict"]
 
-    ph = prompt_hash(prompt)
-    cp_fh.write(json.dumps({"ph": ph, "i": global_idx}) + "\n")
+    ph = prompt_hash(probe.prompt)
+    cp_fh.write(json.dumps({"ph": ph, "i": global_idx, "probe_id": probe.probe_id}) + "\n")
     cp_fh.flush()
-    out_fh.write(json.dumps({**verdict, "timestamp": timestamp}) + "\n")
+    out_fh.write(json.dumps({**verdict, "timestamp": timestamp, "probe_id": probe.probe_id}) + "\n")
     out_fh.flush()
 
     return verdict
 
 
-async def run_campaign(limit=None, dry_run=False):
-    console.print(Panel.fit(
-        f"[bold cyan]MUTANTE CAMPAIGN v2.1[/bold cyan]\n"
-        f"Model: [yellow]{TARGET_MODEL}[/yellow]   "
-        f"Concurrency: [yellow]{CONCURRENCY}[/yellow]",
-        border_style="cyan",
-    ))
-
-    all_prompts = load_datasets()
-    if not all_prompts:
-        console.print("[red]No prompts. Aborting.[/red]")
+async def run_campaign(
+    limit: Optional[int] = None,
+    dry_run: bool = False,
+    categories: Optional[List[str]] = None,
+    sources: Optional[List[str]] = None,
+    mutation_families: Optional[List[str]] = None,
+):
+    # Load probes from registry
+    all_probes = load_all_probes(categories=categories, sources=sources, limit=limit)
+    if not all_probes:
+        console.print("[red]No probes loaded. Aborting.[/red]")
         return
 
-    if limit:
-        all_prompts = all_prompts[:limit]
-        console.print(f"[yellow]⚠ Capped at {limit:,} prompts[/yellow]\n")
+    # Get available mutations
+    available_mutations = get_mutation_names()
+    if mutation_families:
+        available_mutations = [m for m in available_mutations if m in mutation_families]
+        if not available_mutations:
+            console.print(f"[red]No valid mutation families from: {mutation_families}[/red]")
+            return
+
+    console.print(f"[cyan]Available mutations: {', '.join(available_mutations)}[/cyan]")
+
+    # Initialize bandit with available mutations
+    bandit = ThompsonSamplingOrchestrator(available_mutations)
+    gate = BypassQualityGate()
 
     done_hashes = load_checkpoint()
-    pending = [p for p in all_prompts if prompt_hash(p) not in done_hashes]
-    skipped = len(all_prompts) - len(pending)
+    pending = [p for p in all_probes if prompt_hash(p.prompt) not in done_hashes]
+    skipped = len(all_probes) - len(pending)
     if skipped:
         console.print(f"[green]✓ Checkpoint: {skipped:,} done — resuming {len(pending):,}[/green]\n")
 
     if dry_run:
         console.print(f"[bold yellow]DRY RUN — would process {len(pending):,}. Exiting.[/bold yellow]")
+        # Show probe breakdown
+        table = Table(title="Probe Breakdown")
+        table.add_column("Category")
+        table.add_column("Source")
+        table.add_column("Count", justify="right")
+        from collections import Counter
+        cat_counts = Counter((p.category, p.source) for p in pending)
+        for (cat, src), count in cat_counts.most_common():
+            table.add_row(cat, src, str(count))
+        console.print(table)
         return
 
     if not pending:
@@ -269,7 +359,7 @@ async def run_campaign(limit=None, dry_run=False):
         command="python", args=[str(BASE_DIR / "mcp_mutante.py")], env={**os.environ},
     )
 
-    total_target = len(all_prompts)
+    total_target = len(all_probes)
 
     with Progress(
         SpinnerColumn(), TextColumn("[bold cyan]{task.description}"),
@@ -295,7 +385,9 @@ async def run_campaign(limit=None, dry_run=False):
 
                         batch = pending[batch_start: batch_start + mini_batch]
                         tasks = [
-                            process_prompt(session, prompt, global_start + batch_start + j, sem, stats, cp_fh, out_fh)
+                            process_prompt(
+                                session, prompt, global_start + batch_start + j, sem, stats, cp_fh, out_fh, bandit
+                            )
                             for j, prompt in enumerate(batch)
                         ]
                         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -331,12 +423,75 @@ async def run_campaign(limit=None, dry_run=False):
         title="[bold green]◈ MUTANTE CAMPAIGN COMPLETE[/bold green]",
         border_style="green",
     ))
-    console.print("[bold]Final Bandit Probs:[/bold]", bandit.get_probs())
+
+    # Final bandit probs table
+    probs_table = Table(title="Final Bandit Probabilities")
+    probs_table.add_column("Mutation")
+    probs_table.add_column("P(bypass)", justify="right")
+    for mut, prob in sorted(bandit.get_probs().items(), key=lambda x: -x[1]):
+        probs_table.add_row(mut, f"{prob:.3f}")
+    console.print(probs_table)
+
+    # Quality gate on final batch
+    if total > 0:
+        # Load recent verdicts for quality gate
+        recent_verdicts = []
+        if RESULTS_F.exists():
+            with open(RESULTS_F) as f:
+                for line in f:
+                    try:
+                        recent_verdicts.append(json.loads(line))
+                    except Exception:
+                        pass
+        if recent_verdicts:
+            passed, report = gate.evaluate_batch_quality(recent_verdicts[-100:])  # last 100
+            console.print(f"\n[bold]Quality Gate (last 100):[/bold] {'✓ PASSED' if passed else '✗ FAILED'} — {report['reason']}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="MUTANTE Campaign Runner v3.0")
+    parser.add_argument("--limit", type=int, default=None, help="Max probes to process")
+    parser.add_argument("--dry-run", action="store_true", help="Show what would run without executing")
+    parser.add_argument("--category", action="append", help="Filter by probe category (e.g. garak, odin, harmbench)")
+    parser.add_argument("--source", action="append", help="Filter by probe source name")
+    parser.add_argument("--mutations", action="append", help="Restrict to specific mutation families")
+    parser.add_argument("--list-sources", action="store_true", help="List registered probe sources and exit")
+    parser.add_argument("--list-mutations", action="store_true", help="List registered mutation families and exit")
+    args = parser.parse_args()
+
+    _register_probe_sources()
+    _register_mutation_sources()
+
+    if args.list_sources:
+        sources = ProbeSourceRegistry.list_registered()
+        table = Table(title="Registered Probe Sources")
+        table.add_column("Category")
+        table.add_column("Name")
+        table.add_column("Enabled")
+        for s in sources:
+            table.add_row(s["category"], s["name"], "✓" if s["enabled"] else "✗")
+        console.print(table)
+        return
+
+    if args.list_mutations:
+        enabled = {m["name"]: m["enabled"] for m in MutationSourceRegistry.list_registered()}
+        table = Table(title="Registered Mutation Families")
+        table.add_column("Name")
+        table.add_column("Description")
+        table.add_column("Enabled")
+        for m in MutationSourceRegistry.get_all(enabled_only=False):
+            table.add_row(m.name, m.description, "✓" if enabled[m.name] else "✗")
+        console.print(table)
+        return
+
+    asyncio.run(run_campaign(
+        limit=args.limit,
+        dry_run=args.dry_run,
+        categories=args.category,
+        sources=args.source,
+        mutation_families=args.mutations,
+    ))
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="MUTANTE Campaign Runner")
-    parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument("--dry-run", action="store_true")
-    args = parser.parse_args()
-    asyncio.run(run_campaign(limit=args.limit, dry_run=args.dry_run))
+    main()
